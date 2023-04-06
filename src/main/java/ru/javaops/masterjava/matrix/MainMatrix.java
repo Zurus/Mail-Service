@@ -1,8 +1,11 @@
 package ru.javaops.masterjava.matrix;
 
+import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * gkislin
@@ -11,12 +14,17 @@ import java.util.concurrent.Executors;
 public class MainMatrix {
     private static final int MATRIX_SIZE = 1000;
     private static final int THREAD_NUMBER = 10;
+    volatile static int[][] matrixC;
+    volatile static int[][] concurrentMatrixC;
 
-    private final static ExecutorService executor = Executors.newFixedThreadPool(MainMatrix.THREAD_NUMBER);
+    private final static ExecutorService executor = Executors.newFixedThreadPool(THREAD_NUMBER);
+    public static CountDownLatch cdl = new CountDownLatch(MATRIX_SIZE*MATRIX_SIZE);
 
     public static void main(String[] args) throws ExecutionException, InterruptedException {
         final int[][] matrixA = MatrixUtil.create(MATRIX_SIZE);
         final int[][] matrixB = MatrixUtil.create(MATRIX_SIZE);
+
+        Arrays.stream(args).forEach(System.out::println);
 
         double singleThreadSum = 0.;
         double concurrentThreadSum = 0.;
@@ -24,21 +32,32 @@ public class MainMatrix {
         while (count < 6) {
             System.out.println("Pass " + count);
             long start = System.currentTimeMillis();
-            final int[][] matrixC = MatrixUtil.singleThreadMultiply(matrixA, matrixB);
+            matrixC = MatrixUtil.singleThreadMultiply(matrixA, matrixB);
             double duration = (System.currentTimeMillis() - start) / 1000.;
             out("Single thread time, sec: %.3f", duration);
             singleThreadSum += duration;
 
             start = System.currentTimeMillis();
-            final int[][] concurrentMatrixC = MatrixUtil.concurrentMultiply(matrixA, matrixB, executor);
+            concurrentMatrixC = MatrixUtil.concurrentMultiply(matrixA, matrixB, executor);
             duration = (System.currentTimeMillis() - start) / 1000.;
             out("Concurrent thread time, sec: %.3f", duration);
             concurrentThreadSum += duration;
 
+            //System.out.println(cdl.getCount());
+            cdl.await();
+            //System.out.println(cdl.getCount());
+
+            System.out.println("========Сравнение матриц!==========");
             if (!MatrixUtil.compare(matrixC, concurrentMatrixC)) {
                 System.err.println("Comparison failed");
                 break;
             }
+            cdl = new CountDownLatch(MATRIX_SIZE*MATRIX_SIZE);
+//            if (Arrays.equals(matrixC, concurrentMatrixC)) {
+//                System.out.println("Comparison failed");
+//                break;
+//            }
+
             count++;
         }
         executor.shutdown();
